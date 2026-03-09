@@ -1,53 +1,104 @@
 import SophtronBaseClient from "./apiClient.base.js";
+import config from "./config.js";
 
 export class SophtronClient extends SophtronBaseClient {
 
-  // Customer management
-  async getCustomer(name: string) {
-    const customers = await this.get(`/v2/customers/?uniqueId=${encodeURIComponent(name)}`);
-    return customers?.[0];
+  // Health check
+  ping() {
+    return this.get('/Institution/HealthCheckAuth');
   }
 
-  async createCustomer(uniqueId: string) {
-    return this.post('/v2/customers/', { UniqueId: uniqueId });
+  // Institution search
+  searchInstitutions(name: string) {
+    return this.post('/Institution/GetInstitutionByName', { InstitutionName: name });
   }
 
-  // Members (bank connections)
-  getMembers(customerId: string) {
-    return this.get(`/v2/customers/${customerId}/members`);
+  // User institution (bank connection) management
+  getUserInstitutionsByUser() {
+    return this.post('/UserInstitution/GetUserInstitutionsByUser', { UserID: config.SophtronApiUserId });
+  }
+
+  createUserInstitution(institutionId: string, username: string, password: string, pin?: string) {
+    return this.post('/UserInstitution/CreateUserInstitution', {
+      UserID: config.SophtronApiUserId,
+      InstitutionID: institutionId,
+      UserName: username,
+      Password: password,
+      PIN: pin || '',
+    });
+  }
+
+  retryUserInstitution(userInstitutionId: string) {
+    return this.post('/UserInstitution/RetryAddingUserInstitution', {
+      UserInstitutionID: userInstitutionId,
+    });
+  }
+
+  // Job management (connection status + MFA)
+  getJobInfo(jobId: string) {
+    return this.post('/Job/GetJobInformationByID', { JobID: jobId });
+  }
+
+  updateJobSecurityAnswer(jobId: string, answers: string) {
+    return this.post('/Job/UpdateJobSecurityAnswer', {
+      JobID: jobId,
+      SecurityAnswer: answers,
+    });
+  }
+
+  updateJobTokenChoice(jobId: string, tokenChoice: string) {
+    return this.post('/Job/UpdateJobTokenInput', {
+      JobID: jobId,
+      TokenChoice: tokenChoice,
+      TokenInput: null,
+      VerifyPhoneFlag: null,
+    });
+  }
+
+  updateJobTokenInput(jobId: string, tokenInput: string) {
+    return this.post('/Job/UpdateJobTokenInput', {
+      JobID: jobId,
+      TokenChoice: null,
+      TokenInput: tokenInput,
+      VerifyPhoneFlag: null,
+    });
+  }
+
+  updateJobTokenPhoneVerify(jobId: string, verified: boolean) {
+    return this.post('/Job/UpdateJobTokenInput', {
+      JobID: jobId,
+      TokenChoice: null,
+      TokenInput: null,
+      VerifyPhoneFlag: verified,
+    });
+  }
+
+  updateJobCaptchaInput(jobId: string, captchaInput: string) {
+    return this.post('/Job/UpdateJobCaptcha', {
+      JobID: jobId,
+      CaptchaInput: captchaInput,
+    });
   }
 
   // Accounts
-  getAccountsV3(customerId: string) {
-    return this.get(`/v3/customers/${customerId}/accounts`);
+  getUserInstitutionAccounts(userInstitutionId: string) {
+    return this.post('/UserInstitution/GetUserInstitutionAccounts', {
+      UserInstitutionID: userInstitutionId,
+    });
   }
 
-  getMemberAccountsV3(customerId: string, memberId: string) {
-    return this.get(`/v3/customers/${customerId}/Members/${memberId}/accounts`);
-  }
-
-  getAccountV3(customerId: string, memberId: string, accountId: string) {
-    return this.get(`/v3/customers/${customerId}/Members/${memberId}/accounts/${accountId}`);
+  refreshAccount(accountId: string) {
+    return this.post('/UserInstitutionAccount/RefreshUserInstitutionAccount', {
+      AccountID: accountId,
+    });
   }
 
   // Transactions
-  getTransactions(customerId: string, accountId: string, startTime: Date, endTime: Date) {
-    const path = `/v2/customers/${customerId}/accounts/${accountId}/transactions?startDate=${startTime.toISOString().substring(0, 10)}&endDate=${endTime.toISOString().substring(0, 10)}`;
-    return this.get(path);
-  }
-
-  getTransactionsV3(customerId: string, accountId: string, startTime: Date, endTime: Date) {
-    const path = `/v3/customers/${customerId}/accounts/${accountId}/transactions?startDate=${startTime.toISOString().substring(0, 10)}&endDate=${endTime.toISOString().substring(0, 10)}`;
-    return this.get(path);
-  }
-
-  // Identity
-  getIdentityV3(customerId: string, memberId: string) {
-    return this.get(`/v3/Customers/${customerId}/Members/${memberId}/identity`);
-  }
-
-  // Institutions
-  async searchInstitutions(name: string) {
-    return this.get(`/v2/institutions/?name=${encodeURIComponent(name)}`);
+  getTransactions(accountId: string, startDate: Date, endDate: Date) {
+    return this.post('/Transaction/GetTransactionsByTransactionDate', {
+      AccountID: accountId,
+      StartDate: startDate.toISOString(),
+      EndDate: endDate.toISOString(),
+    });
   }
 }

@@ -1,6 +1,3 @@
-import dotenv from 'dotenv';
-dotenv.config();
-
 export default {
   SophtronApiUserId: process.env.SOPHTRON_USER_ID || '',
   SophtronApiUserSecret: process.env.SOPHTRON_ACCESS_KEY || '',

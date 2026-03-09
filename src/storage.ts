@@ -4,7 +4,6 @@ import os from 'node:os';
 
 const dataDir = path.join(os.homedir(), '.sophtron-mcp');
 const connectionsFile = path.join(dataDir, 'connections.json');
-const customerFile = path.join(dataDir, 'customer.json');
 
 function ensureDataDir() {
   if (!fs.existsSync(dataDir)) {
@@ -20,20 +19,9 @@ export function loadConnections(): Record<string, any> {
   return {};
 }
 
-export function saveConnections(connections: Record<string, any>) {
+export function saveConnection(institutionName: string, data: any) {
+  const connections = loadConnections();
+  connections[institutionName] = { ...data, savedAt: new Date().toISOString() };
   ensureDataDir();
   fs.writeFileSync(connectionsFile, JSON.stringify(connections, null, 2));
-}
-
-export function loadCustomer(): { customerId: string; customerName: string } | null {
-  ensureDataDir();
-  if (fs.existsSync(customerFile)) {
-    return JSON.parse(fs.readFileSync(customerFile, 'utf-8'));
-  }
-  return null;
-}
-
-export function saveCustomer(customerId: string, customerName: string) {
-  ensureDataDir();
-  fs.writeFileSync(customerFile, JSON.stringify({ customerId, customerName }, null, 2));
 }

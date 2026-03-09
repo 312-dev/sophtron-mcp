@@ -1,265 +1,252 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerAppTool, registerAppResource, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
 import { z } from 'zod';
 import { SophtronClient } from './apiClient.js';
-import { loadConnections, saveConnections, loadCustomer, saveCustomer } from './storage.js';
-import config from './config.js';
+import { saveConnection } from './storage.js';
+import { CONNECT_BANK_HTML } from './ui/connect-bank.js';
+
+const CONNECT_BANK_URI = 'ui://sophtron/connect-bank.html';
 
 const client = new SophtronClient();
-
-async function resolveCustomerId(): Promise<string | null> {
-  // Check disk cache first
-  const cached = loadCustomer();
-  if (cached?.customerId) return cached.customerId;
-
-  // Try env var customer name
-  if (config.CustomerName) {
-    const customer = await client.getCustomer(config.CustomerName);
-    if (customer?.CustomerID) {
-      saveCustomer(customer.CustomerID, config.CustomerName);
-      return customer.CustomerID;
-    }
-  }
-
-  return null;
-}
 
 function formatError(error: unknown): string {
   if (error instanceof Error) return error.message;
   return String(error);
 }
 
+function textResult(data: any) {
+  const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  return { content: [{ type: 'text' as const, text }] };
+}
+
 export function registerTools(server: McpServer) {
 
-  // --- Customer discovery ---
+  // --- MCP App: Bank connection wizard resource ---
+  registerAppResource(
+    server,
+    CONNECT_BANK_URI,
+    CONNECT_BANK_URI,
+    { mimeType: RESOURCE_MIME_TYPE },
+    async () => ({
+      contents: [{ uri: CONNECT_BANK_URI, mimeType: RESOURCE_MIME_TYPE, text: CONNECT_BANK_HTML }],
+    }),
+  );
 
-  server.registerTool('setup_customer', {
-    title: 'Setup Customer',
-    description: 'Create or find a Sophtron customer. Run this first if you have not connected before. Uses your configured SOPHTRON_CUSTOMER_NAME or creates a new one with the given name.',
-    inputSchema: {
-      name: z.string().describe('Unique name for the customer (e.g. your email or username)'),
+  // --- MCP App: Connect bank (entry point, triggers UI) ---
+  registerAppTool(
+    server,
+    'connect_bank',
+    {
+      title: 'Connect Bank Account',
+      description: 'Launch an interactive wizard to connect a new bank or credit card account. Renders a guided UI for searching institutions, entering credentials, and handling MFA verification.',
+      inputSchema: {},
+      _meta: { ui: { resourceUri: CONNECT_BANK_URI } },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
-  }, async ({ name }) => {
-    try {
-      let customer = await client.getCustomer(name);
-      if (!customer) {
-        customer = await client.createCustomer(name);
-      }
-      if (customer?.CustomerID) {
-        saveCustomer(customer.CustomerID, name);
-        return {
-          content: [{ type: 'text' as const, text: `Customer ready.\nID: ${customer.CustomerID}\nName: ${name}\n\nSaved to ~/.sophtron-mcp/customer.json` }],
-        };
-      }
-      return {
-        content: [{ type: 'text' as const, text: 'Could not create or find customer. Check your Sophtron credentials.' }],
-      };
-    } catch (e) {
-      return { content: [{ type: 'text' as const, text: `Error: ${formatError(e)}` }] };
-    }
-  });
+    async () => textResult({ status: 'ready', message: 'Bank connection wizard launched.' }),
+  );
 
-  server.registerTool('get_customer', {
-    title: 'Get Customer',
-    description: 'Look up a Sophtron customer by unique ID/name',
-    inputSchema: {
-      name: z.string().describe('Customer unique ID or name'),
+  // --- Tools called by the wizard UI ---
+
+  server.registerTool(
+    'search_institutions',
+    {
+      title: 'Search Institutions',
+      description: 'Search for banks and financial institutions by name',
+      inputSchema: { query: z.string().describe('Bank or institution name') },
     },
-  }, async ({ name }) => {
-    try {
-      const customer = await client.getCustomer(name);
-      return {
-        content: [{ type: 'text' as const, text: customer ? JSON.stringify(customer, null, 2) : 'No customer found with that name.' }],
-      };
-    } catch (e) {
-      return { content: [{ type: 'text' as const, text: `Error: ${formatError(e)}` }] };
-    }
-  });
-
-  // --- Bank connections (members) ---
-
-  server.registerTool('list_connections', {
-    title: 'List Connections',
-    description: 'List all bank connections (members) for the current customer. Shows which banks/institutions are linked.',
-    inputSchema: {},
-  }, async () => {
-    try {
-      const customerId = await resolveCustomerId();
-      if (!customerId) {
-        return { content: [{ type: 'text' as const, text: 'No customer configured. Run setup_customer first.' }] };
+    async ({ query }) => {
+      try {
+        const results = await client.searchInstitutions(query);
+        return textResult(results || []);
+      } catch (e) {
+        return textResult({ error: formatError(e) });
       }
-      const members = await client.getMembers(customerId);
-      if (!members || (Array.isArray(members) && members.length === 0)) {
-        return { content: [{ type: 'text' as const, text: 'No bank connections found. You need to connect a bank account through Sophtron first.' }] };
-      }
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(members, null, 2) }],
-      };
-    } catch (e) {
-      return { content: [{ type: 'text' as const, text: `Error: ${formatError(e)}` }] };
-    }
-  });
-
-  server.registerTool('save_connection', {
-    title: 'Save Connection',
-    description: 'Manually save a bank connection reference (e.g. from a widget session). Persists to disk.',
-    inputSchema: {
-      institutionName: z.string().describe('Name of the bank/institution'),
-      memberId: z.string().describe('Member/connection ID'),
-      accountId: z.string().optional().describe('Account ID if known'),
     },
-  }, async ({ institutionName, memberId, accountId }) => {
-    const connections = loadConnections();
-    connections[institutionName] = {
-      memberId,
-      accountId: accountId || null,
-      institutionName,
-      savedAt: new Date().toISOString(),
-    };
-    saveConnections(connections);
-    return {
-      content: [{ type: 'text' as const, text: `Connection saved for ${institutionName}.\nMember ID: ${memberId}` }],
-    };
-  });
+  );
 
-  // --- Accounts ---
-
-  server.registerTool('list_accounts', {
-    title: 'List Accounts',
-    description: 'List all accounts across all bank connections for the current customer. Shows account names, types, and balances.',
-    inputSchema: {},
-  }, async () => {
-    try {
-      const customerId = await resolveCustomerId();
-      if (!customerId) {
-        return { content: [{ type: 'text' as const, text: 'No customer configured. Run setup_customer first.' }] };
-      }
-      const accounts = await client.getAccountsV3(customerId);
-      if (!accounts || (Array.isArray(accounts) && accounts.length === 0)) {
-        return { content: [{ type: 'text' as const, text: 'No accounts found.' }] };
-      }
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(accounts, null, 2) }],
-      };
-    } catch (e) {
-      return { content: [{ type: 'text' as const, text: `Error: ${formatError(e)}` }] };
-    }
-  });
-
-  server.registerTool('get_account', {
-    title: 'Get Account Details',
-    description: 'Get detailed information about a specific account',
-    inputSchema: {
-      memberId: z.string().describe('Member/connection ID'),
-      accountId: z.string().describe('Account ID'),
+  server.registerTool(
+    'create_connection',
+    {
+      title: 'Create Bank Connection',
+      description: 'Create a new bank connection with login credentials. Returns a job ID for polling.',
+      inputSchema: {
+        institutionId: z.string().describe('Institution ID from search results'),
+        username: z.string().describe('Bank login username'),
+        password: z.string().describe('Bank login password'),
+        pin: z.string().optional().describe('PIN if required'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
-  }, async ({ memberId, accountId }) => {
-    try {
-      const customerId = await resolveCustomerId();
-      if (!customerId) {
-        return { content: [{ type: 'text' as const, text: 'No customer configured. Run setup_customer first.' }] };
+    async ({ institutionId, username, password, pin }) => {
+      try {
+        const result = await client.createUserInstitution(institutionId, username, password, pin);
+        return textResult(result);
+      } catch (e) {
+        return textResult({ error: formatError(e) });
       }
-      const account = await client.getAccountV3(customerId, memberId, accountId);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(account, null, 2) }],
-      };
-    } catch (e) {
-      return { content: [{ type: 'text' as const, text: `Error: ${formatError(e)}` }] };
-    }
-  });
-
-  server.registerTool('get_member_accounts', {
-    title: 'Get Member Accounts',
-    description: 'List all accounts for a specific bank connection (member)',
-    inputSchema: {
-      memberId: z.string().describe('Member/connection ID'),
     },
-  }, async ({ memberId }) => {
-    try {
-      const customerId = await resolveCustomerId();
-      if (!customerId) {
-        return { content: [{ type: 'text' as const, text: 'No customer configured. Run setup_customer first.' }] };
-      }
-      const accounts = await client.getMemberAccountsV3(customerId, memberId);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(accounts, null, 2) }],
-      };
-    } catch (e) {
-      return { content: [{ type: 'text' as const, text: `Error: ${formatError(e)}` }] };
-    }
-  });
+  );
 
-  // --- Transactions ---
-
-  server.registerTool('get_transactions', {
-    title: 'Get Transactions',
-    description: 'Get transactions for an account within a date range. Defaults to the last 90 days if no dates are specified.',
-    inputSchema: {
-      accountId: z.string().describe('Account ID'),
-      startDate: z.string().optional().describe('Start date (YYYY-MM-DD). Defaults to 90 days ago.'),
-      endDate: z.string().optional().describe('End date (YYYY-MM-DD). Defaults to today.'),
+  server.registerTool(
+    'poll_job',
+    {
+      title: 'Poll Job Status',
+      description: 'Check the status of a bank connection job. Used during the connection flow.',
+      inputSchema: { jobId: z.string().describe('Job ID from create_connection') },
     },
-  }, async ({ accountId, startDate, endDate }) => {
-    try {
-      const customerId = await resolveCustomerId();
-      if (!customerId) {
-        return { content: [{ type: 'text' as const, text: 'No customer configured. Run setup_customer first.' }] };
+    async ({ jobId }) => {
+      try {
+        const job = await client.getJobInfo(jobId);
+        return textResult(job);
+      } catch (e) {
+        return textResult({ error: formatError(e) });
       }
-      const end = endDate ? new Date(endDate) : new Date();
-      const start = startDate ? new Date(startDate) : new Date(end.getTime() - 90 * 24 * 60 * 60 * 1000);
-      const transactions = await client.getTransactionsV3(customerId, accountId, start, end);
-      if (!transactions || (Array.isArray(transactions) && transactions.length === 0)) {
-        return { content: [{ type: 'text' as const, text: 'No transactions found for this period.' }] };
-      }
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(transactions, null, 2) }],
-      };
-    } catch (e) {
-      return { content: [{ type: 'text' as const, text: `Error: ${formatError(e)}` }] };
-    }
-  });
-
-  // --- Identity / Profile ---
-
-  server.registerTool('get_identity', {
-    title: 'Get Identity',
-    description: 'Get profile/identity information for a bank connection (name, address, etc.)',
-    inputSchema: {
-      memberId: z.string().describe('Member/connection ID'),
     },
-  }, async ({ memberId }) => {
-    try {
-      const customerId = await resolveCustomerId();
-      if (!customerId) {
-        return { content: [{ type: 'text' as const, text: 'No customer configured. Run setup_customer first.' }] };
-      }
-      const identity = await client.getIdentityV3(customerId, memberId);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(identity, null, 2) }],
-      };
-    } catch (e) {
-      return { content: [{ type: 'text' as const, text: `Error: ${formatError(e)}` }] };
-    }
-  });
+  );
 
-  // --- Institution search ---
-
-  server.registerTool('search_institutions', {
-    title: 'Search Institutions',
-    description: 'Search for banks and financial institutions by name. Useful for finding institution IDs.',
-    inputSchema: {
-      query: z.string().describe('Bank or institution name to search for'),
+  server.registerTool(
+    'answer_mfa',
+    {
+      title: 'Answer MFA Challenge',
+      description: 'Submit an MFA response (security question answer, verification code, captcha, etc.)',
+      inputSchema: {
+        jobId: z.string().describe('Job ID'),
+        type: z.enum(['security_answer', 'token_choice', 'token_input', 'token_phone', 'captcha']).describe('Type of MFA challenge'),
+        value: z.string().describe('The answer/code/choice'),
+      },
+      annotations: { readOnlyHint: false },
     },
-  }, async ({ query }) => {
-    try {
-      const results = await client.searchInstitutions(query);
-      if (!results || (Array.isArray(results) && results.length === 0)) {
-        return { content: [{ type: 'text' as const, text: 'No institutions found matching that query.' }] };
+    async ({ jobId, type, value }) => {
+      try {
+        let result;
+        switch (type) {
+          case 'security_answer':
+            result = await client.updateJobSecurityAnswer(jobId, value);
+            break;
+          case 'token_choice':
+            result = await client.updateJobTokenChoice(jobId, value);
+            break;
+          case 'token_input':
+            result = await client.updateJobTokenInput(jobId, value);
+            break;
+          case 'token_phone':
+            result = await client.updateJobTokenPhoneVerify(jobId, value === 'true');
+            break;
+          case 'captcha':
+            result = await client.updateJobCaptchaInput(jobId, value);
+            break;
+        }
+        return textResult(result || { ok: true });
+      } catch (e) {
+        return textResult({ error: formatError(e) });
       }
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(results, null, 2) }],
-      };
-    } catch (e) {
-      return { content: [{ type: 'text' as const, text: `Error: ${formatError(e)}` }] };
-    }
-  });
+    },
+  );
+
+  server.registerTool(
+    'get_connection_accounts',
+    {
+      title: 'Get Connection Accounts',
+      description: 'List accounts for a specific bank connection',
+      inputSchema: { userInstitutionId: z.string().describe('UserInstitution ID from the connection') },
+    },
+    async ({ userInstitutionId }) => {
+      try {
+        const accounts = await client.getUserInstitutionAccounts(userInstitutionId);
+        return textResult(accounts || []);
+      } catch (e) {
+        return textResult({ error: formatError(e) });
+      }
+    },
+  );
+
+  // --- Data query tools (used directly by Claude) ---
+
+  server.registerTool(
+    'list_connections',
+    {
+      title: 'List Bank Connections',
+      description: 'List all linked bank connections (UserInstitutions) for this account.',
+      annotations: { readOnlyHint: true },
+    },
+    async () => {
+      try {
+        const connections = await client.getUserInstitutionsByUser();
+        if (!connections || (Array.isArray(connections) && connections.length === 0)) {
+          return textResult('No bank connections found. Use connect_bank to link an account.');
+        }
+        return textResult(connections);
+      } catch (e) {
+        return textResult({ error: formatError(e) });
+      }
+    },
+  );
+
+  server.registerTool(
+    'list_accounts',
+    {
+      title: 'List Accounts',
+      description: 'List all accounts for a bank connection. Provide the UserInstitution ID.',
+      inputSchema: {
+        userInstitutionId: z.string().describe('UserInstitution ID'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ userInstitutionId }) => {
+      try {
+        const accounts = await client.getUserInstitutionAccounts(userInstitutionId);
+        return textResult(accounts || []);
+      } catch (e) {
+        return textResult({ error: formatError(e) });
+      }
+    },
+  );
+
+  server.registerTool(
+    'get_transactions',
+    {
+      title: 'Get Transactions',
+      description: 'Get transactions for a bank account. Defaults to last 90 days.',
+      inputSchema: {
+        accountId: z.string().describe('Account ID'),
+        startDate: z.string().optional().describe('Start date (YYYY-MM-DD). Defaults to 90 days ago.'),
+        endDate: z.string().optional().describe('End date (YYYY-MM-DD). Defaults to today.'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ accountId, startDate, endDate }) => {
+      try {
+        const end = endDate ? new Date(endDate) : new Date();
+        const start = startDate ? new Date(startDate) : new Date(end.getTime() - 90 * 24 * 60 * 60 * 1000);
+        const transactions = await client.getTransactions(accountId, start, end);
+        if (!transactions || (Array.isArray(transactions) && transactions.length === 0)) {
+          return textResult('No transactions found for this period.');
+        }
+        return textResult(transactions);
+      } catch (e) {
+        return textResult({ error: formatError(e) });
+      }
+    },
+  );
+
+  server.registerTool(
+    'refresh_account',
+    {
+      title: 'Refresh Account',
+      description: 'Trigger a fresh data pull from the bank for a specific account. Returns a job ID to poll.',
+      inputSchema: {
+        accountId: z.string().describe('Account ID to refresh'),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    async ({ accountId }) => {
+      try {
+        const result = await client.refreshAccount(accountId);
+        return textResult(result);
+      } catch (e) {
+        return textResult({ error: formatError(e) });
+      }
+    },
+  );
 }
