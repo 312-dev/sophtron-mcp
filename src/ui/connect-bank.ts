@@ -6,45 +6,88 @@ export const CONNECT_BANK_HTML = `<!DOCTYPE html>
 <title>Connect Bank</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1a1a2e; background: #fff; padding: 20px; max-width: 480px; margin: 0 auto; }
-  h2 { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+  body {
+    font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+    color: var(--color-text-primary, #1a1a2e);
+    background: var(--color-background-primary, transparent);
+    padding: 20px; max-width: 480px; margin: 0 auto;
+  }
+  h2 { font-size: var(--font-heading-sm-size, 18px); font-weight: var(--font-weight-semibold, 600); margin-bottom: 16px; }
   .step { display: none; }
   .step.active { display: block; }
-  .search-box { width: 100%; padding: 10px 14px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 15px; outline: none; transition: border-color 0.15s; }
-  .search-box:focus { border-color: #6366f1; }
+  .search-box {
+    width: 100%; padding: 10px 14px;
+    border: var(--border-width-regular, 1.5px) solid var(--color-border-secondary, #d1d5db);
+    border-radius: var(--border-radius-md, 8px);
+    font-size: var(--font-text-md-size, 15px); outline: none; transition: border-color 0.15s;
+    background: var(--color-background-primary, #fff);
+    color: var(--color-text-primary, inherit);
+  }
+  .search-box:focus { border-color: var(--color-ring-primary, #6366f1); }
   .results { margin-top: 12px; max-height: 260px; overflow-y: auto; }
-  .result-item { padding: 12px 14px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; display: flex; justify-content: space-between; align-items: center; }
-  .result-item:hover { background: #f5f3ff; border-color: #a5b4fc; }
-  .result-item .name { font-weight: 500; font-size: 14px; }
-  .result-item .url { font-size: 12px; color: #6b7280; }
+  .result-item {
+    padding: 12px 14px;
+    border: var(--border-width-regular, 1px) solid var(--color-border-secondary, #e5e7eb);
+    border-radius: var(--border-radius-md, 8px);
+    margin-bottom: 8px; cursor: pointer; transition: all 0.15s;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .result-item:hover { background: var(--color-background-ghost, #f5f3ff); border-color: var(--color-border-primary, #a5b4fc); }
+  .result-item .name { font-weight: var(--font-weight-medium, 500); font-size: var(--font-text-sm-size, 14px); }
+  .result-item .url { font-size: var(--font-text-xs-size, 12px); color: var(--color-text-secondary, #6b7280); }
   .form-group { margin-bottom: 14px; }
-  .form-group label { display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 5px; }
-  .form-group input { width: 100%; padding: 10px 14px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 15px; outline: none; }
-  .form-group input:focus { border-color: #6366f1; }
-  .btn { display: inline-flex; align-items: center; justify-content: center; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; min-width: 120px; }
-  .btn-primary { background: #6366f1; color: #fff; }
-  .btn-primary:hover { background: #4f46e5; }
-  .btn-primary:disabled { background: #a5b4fc; cursor: not-allowed; }
-  .btn-secondary { background: #f3f4f6; color: #374151; margin-right: 8px; }
-  .btn-secondary:hover { background: #e5e7eb; }
+  .form-group label { display: block; font-size: var(--font-text-xs-size, 13px); font-weight: var(--font-weight-medium, 500); color: var(--color-text-secondary, #374151); margin-bottom: 5px; }
+  .form-group input {
+    width: 100%; padding: 10px 14px;
+    border: var(--border-width-regular, 1.5px) solid var(--color-border-secondary, #d1d5db);
+    border-radius: var(--border-radius-md, 8px);
+    font-size: var(--font-text-md-size, 15px); outline: none;
+    background: var(--color-background-primary, #fff);
+    color: var(--color-text-primary, inherit);
+  }
+  .form-group input:focus { border-color: var(--color-ring-primary, #6366f1); }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 10px 20px; border: none;
+    border-radius: var(--border-radius-md, 8px);
+    font-size: var(--font-text-sm-size, 14px); font-weight: var(--font-weight-medium, 500);
+    cursor: pointer; transition: all 0.15s; min-width: 120px;
+  }
+  .btn-primary { background: var(--color-ring-primary, #6366f1); color: var(--color-text-inverse, #fff); }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary { background: var(--color-background-secondary, #f3f4f6); color: var(--color-text-primary, #374151); margin-right: 8px; }
+  .btn-secondary:hover { opacity: 0.8; }
   .btn-row { display: flex; justify-content: flex-end; margin-top: 16px; }
-  .status { padding: 16px; background: #f9fafb; border-radius: 10px; text-align: center; }
-  .status .spinner { display: inline-block; width: 20px; height: 20px; border: 2.5px solid #e5e7eb; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.7s linear infinite; margin-bottom: 10px; }
+  .status { padding: 16px; background: var(--color-background-secondary, #f9fafb); border-radius: var(--border-radius-lg, 10px); text-align: center; }
+  .status .spinner { display: inline-block; width: 20px; height: 20px; border: 2.5px solid var(--color-border-secondary, #e5e7eb); border-top-color: var(--color-ring-primary, #6366f1); border-radius: 50%; animation: spin 0.7s linear infinite; margin-bottom: 10px; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .status .text { font-size: 14px; color: #6b7280; }
-  .mfa-info { font-size: 13px; color: #6b7280; margin-bottom: 10px; }
-  .success-box { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; padding: 20px; text-align: center; }
-  .success-box h3 { color: #065f46; font-size: 16px; margin-bottom: 8px; }
-  .success-box p { color: #047857; font-size: 14px; }
-  .error-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 16px; }
-  .error-box p { color: #991b1b; font-size: 14px; }
+  .status .text { font-size: var(--font-text-sm-size, 14px); color: var(--color-text-secondary, #6b7280); }
+  .mfa-info { font-size: var(--font-text-xs-size, 13px); color: var(--color-text-secondary, #6b7280); margin-bottom: 10px; }
+  .success-box { background: var(--color-background-success, #ecfdf5); border: 1px solid var(--color-border-success, #a7f3d0); border-radius: var(--border-radius-lg, 10px); padding: 20px; text-align: center; }
+  .success-box h3 { color: var(--color-text-success, #065f46); font-size: var(--font-heading-xs-size, 16px); margin-bottom: 8px; }
+  .success-box p { color: var(--color-text-success, #047857); font-size: var(--font-text-sm-size, 14px); }
+  .error-box { background: var(--color-background-danger, #fef2f2); border: 1px solid var(--color-border-danger, #fecaca); border-radius: var(--border-radius-lg, 10px); padding: 16px; }
+  .error-box p { color: var(--color-text-danger, #991b1b); font-size: var(--font-text-sm-size, 14px); }
   .account-list { margin-top: 14px; text-align: left; }
-  .account-item { padding: 10px 14px; background: #fff; border: 1px solid #d1f4e0; border-radius: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; }
-  .account-item .acct-name { font-weight: 500; font-size: 14px; }
-  .account-item .acct-balance { font-size: 14px; color: #047857; font-weight: 600; }
-  .no-results { text-align: center; padding: 30px; color: #9ca3af; font-size: 14px; }
-  .selected-bank { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f5f3ff; border: 1px solid #c7d2fe; border-radius: 8px; margin-bottom: 16px; font-size: 14px; font-weight: 500; }
-  #init-loading { text-align: center; padding: 40px; color: #9ca3af; font-size: 14px; }
+  .account-item {
+    padding: 10px 14px;
+    background: var(--color-background-primary, #fff);
+    border: 1px solid var(--color-border-success, #d1f4e0);
+    border-radius: var(--border-radius-md, 8px);
+    margin-bottom: 6px; display: flex; justify-content: space-between;
+  }
+  .account-item .acct-name { font-weight: var(--font-weight-medium, 500); font-size: var(--font-text-sm-size, 14px); }
+  .account-item .acct-balance { font-size: var(--font-text-sm-size, 14px); color: var(--color-text-success, #047857); font-weight: var(--font-weight-semibold, 600); }
+  .no-results { text-align: center; padding: 30px; color: var(--color-text-tertiary, #9ca3af); font-size: var(--font-text-sm-size, 14px); }
+  .selected-bank {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    background: var(--color-background-ghost, #f5f3ff);
+    border: 1px solid var(--color-border-primary, #c7d2fe);
+    border-radius: var(--border-radius-md, 8px);
+    margin-bottom: 16px; font-size: var(--font-text-sm-size, 14px); font-weight: var(--font-weight-medium, 500);
+  }
+  #init-loading { text-align: center; padding: 40px; color: var(--color-text-tertiary, #9ca3af); font-size: var(--font-text-sm-size, 14px); }
 </style>
 </head>
 <body>
@@ -167,7 +210,7 @@ window.addEventListener('message', (e) => {
     // Tool arguments — wizard has none
   }
   if (msg.method === 'ui/notifications/host-context-changed') {
-    // Could apply theme changes
+    applyHostContext(msg.params);
   }
 
   // Handle ping
@@ -175,6 +218,36 @@ window.addEventListener('message', (e) => {
     sendMessage({ jsonrpc: '2.0', id: msg.id, result: {} });
   }
 });
+
+// --- Theme + style helpers ---
+function applyTheme(theme) {
+  if (!theme) return;
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.style.colorScheme = theme;
+}
+
+function applyStyleVars(vars) {
+  if (!vars) return;
+  const root = document.documentElement;
+  for (const [k, v] of Object.entries(vars)) {
+    if (v !== undefined) root.style.setProperty(k, v);
+  }
+}
+
+function applyFonts(css) {
+  if (!css || document.getElementById('__mcp-host-fonts')) return;
+  const s = document.createElement('style');
+  s.id = '__mcp-host-fonts';
+  s.textContent = css;
+  document.head.appendChild(s);
+}
+
+function applyHostContext(ctx) {
+  if (!ctx) return;
+  if (ctx.theme) applyTheme(ctx.theme);
+  if (ctx.styles?.variables) applyStyleVars(ctx.styles.variables);
+  if (ctx.styles?.css?.fonts) applyFonts(ctx.styles.css.fonts);
+}
 
 // --- MCP Apps initialization handshake ---
 async function init() {
@@ -185,6 +258,9 @@ async function init() {
       protocolVersion: '2026-01-26',
     });
     initialized = true;
+
+    // Apply host theme and styles
+    if (result) applyHostContext(result.hostContext || result);
 
     // Send initialized notification
     sendNotification('ui/notifications/initialized');
@@ -480,8 +556,41 @@ async function onConnectionSuccess() {
           (number ? ' <span style="color:#9ca3af">' + number + '</span>' : '') +
           '</div>' + (balance ? '<div class="acct-balance">' + balance + '</div>' : '') + '</div>';
       }).join('');
+
+      // Tell Claude about the connected accounts
+      const summary = accounts.map(a => {
+        const name = a.AccountName || a.Name || 'Account';
+        const id = a.AccountID || a.Id || '';
+        const bal = a.Balance != null ? '$' + Number(a.Balance).toFixed(2) : 'N/A';
+        return name + ' (ID: ' + id + ', Balance: ' + bal + ')';
+      }).join('\\n');
+
+      sendRequest('ui/update-model-context', {
+        content: [{ type: 'text', text:
+          'Bank connection successful. Institution: ' + selectedInstitution.name +
+          '. UserInstitutionID: ' + currentUserInstitutionId +
+          '. ' + accounts.length + ' accounts linked:\\n' + summary +
+          '\\n\\nThe user can now query transactions using get_transactions with any AccountID above.'
+        }]
+      }).catch(() => {});
+
+      sendRequest('ui/message', {
+        message: {
+          role: 'user',
+          content: { type: 'text', text:
+            'I just connected ' + selectedInstitution.name + ' with ' + accounts.length + ' accounts via the wizard. The UserInstitutionID is ' + currentUserInstitutionId + '.'
+          }
+        }
+      }).catch(() => {});
     } else {
       document.getElementById('success-message').textContent = selectedInstitution.name + ' connected successfully!';
+      sendRequest('ui/update-model-context', {
+        content: [{ type: 'text', text:
+          'Bank connection successful. Institution: ' + selectedInstitution.name +
+          '. UserInstitutionID: ' + currentUserInstitutionId +
+          '. Use list_accounts to see available accounts.'
+        }]
+      }).catch(() => {});
     }
     showStep('success');
   } catch (e) {
