@@ -381,7 +381,7 @@ async function pollJob() {
         return;
       }
 
-      setProcessingText('Waiting for bank response... (' + attempts + ')');
+      setProcessingText('Waiting for bank response...');
     } catch (e) {
       // Network error, retry
     }
