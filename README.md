@@ -1,9 +1,113 @@
-# Sophtron ChatGPT Bank Connection MCP Server
+# sophtron-mcp
 
-- Brings up sophtron hosted UCW-Widget to allow user to make a connection to a his bank account inside of a chat session. The UCW-widget is another open source project that creates an unified widget for users to connect to banks/utilities across aggregators. https://github.com/sophtron/ucw-app
-- Use the connection info to query account info. owner info and transactions.
-- Saves connected account to the mcp server in order to query and update data in a different session.
-- Sophtron is a data aggregator similar to Plaid. Sophtron provides a non-code widget as well as restful API for developers to let users add banking, investment, loan, insurance, utility accounts. https://sophtron.com/usecase
-- Sophtron currently supports over 14,000 financial institutions, and over 30,000 non-financial institutions such as utility, cell phone, cable, etc. Sophtron has 100% coverage of institutions in US and Canada https://sophtron.com/
-- For users who call the Sophtron MCP server directly in ChatGPT, users don't need to manually register with Sophtron to use the in-chat-app. User's ChatGPT account will be associated with a uniquely gnereated Sophtron account to track all the connections. Only owner of the ChatGPT account, or other future AI assistant account, will have access to data from that connection.
-- Sophtron provides free banking and utility data for users and individual developers of the in-chat-app. 
+A Claude Desktop MCP server for querying bank accounts, credit cards, and transactions via [Sophtron](https://sophtron.com)'s financial data API.
+
+**Patched for Claude** — forked from [sophtron/chagpt-mcp](https://github.com/sophtron/chagpt-mcp) which was built exclusively for ChatGPT. This version replaces the OpenAI-specific transport, auth, and widget code with a standard stdio MCP server that works with Claude Desktop, Claude Code, and any MCP-compatible client.
+
+**Free alternative** to requiring a paid budgeting app (Monarch Money, YNAB, etc.) as middleware. Sophtron provides free API access for individual use, connecting directly to 12,000+ financial institutions via their data aggregation layer.
+
+## Setup
+
+### 1. Get Sophtron credentials
+
+Sign up at [sophtron.com](https://sophtron.com) and get your **User ID** and **Access Key**.
+
+### 2. Install
+
+```bash
+git clone https://github.com/312-dev/sophtron-mcp.git
+cd sophtron-mcp
+npm install
+npm run build
+```
+
+### 3. Configure credentials
+
+```bash
+cp .env.example .env
+# Edit .env with your Sophtron User ID and Access Key
+```
+
+### 4. Add to Claude Desktop
+
+Add this to your `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "sophtron": {
+      "command": "node",
+      "args": ["/path/to/sophtron-mcp/dist/index.js"],
+      "env": {
+        "SOPHTRON_USER_ID": "your-user-id",
+        "SOPHTRON_ACCESS_KEY": "your-access-key"
+      }
+    }
+  }
+}
+```
+
+Or for Claude Code, add to `~/.claude.json` under `mcpServers`:
+
+```json
+{
+  "sophtron": {
+    "type": "stdio",
+    "command": "node",
+    "args": ["/path/to/sophtron-mcp/dist/index.js"],
+    "env": {
+      "SOPHTRON_USER_ID": "your-user-id",
+      "SOPHTRON_ACCESS_KEY": "your-access-key"
+    }
+  }
+}
+```
+
+### 5. Connect your bank
+
+Bank connections are managed through Sophtron's infrastructure. To link your accounts:
+
+1. Use the Sophtron widget through their [ChatGPT integration](https://mcp.sophtron.com/mcp) or web portal to connect your bank
+2. Once connected, this MCP server can query all your account data from Claude
+
+## Available tools
+
+| Tool | Description |
+|------|-------------|
+| `setup_customer` | Create or find a Sophtron customer profile (run first) |
+| `get_customer` | Look up a customer by name |
+| `list_connections` | List all linked bank connections |
+| `save_connection` | Manually save a connection reference |
+| `list_accounts` | List all accounts across all connections |
+| `get_account` | Get details for a specific account |
+| `get_member_accounts` | List accounts for a specific bank connection |
+| `get_transactions` | Get transactions for an account (defaults to last 90 days) |
+| `get_identity` | Get profile/identity info for a connection |
+| `search_institutions` | Search for banks by name |
+
+## How it works
+
+This server communicates with Sophtron's REST API using HMAC-SHA256 signed requests. Your credentials never leave your machine — they're used locally to sign API calls.
+
+Data is cached locally in `~/.sophtron-mcp/`:
+- `customer.json` — your Sophtron customer ID
+- `connections.json` — saved bank connection references
+
+## What changed from the original
+
+The [upstream repo](https://github.com/sophtron/chagpt-mcp) is built for ChatGPT with:
+- OpenAI-specific widget rendering (`window.openai.setWidgetState`)
+- OAuth2 JWT authentication flow
+- Express HTTP transport only
+- In-memory connection storage
+- `structuredContent` and `openai/*` metadata
+
+This fork replaces all of that with:
+- Standard MCP stdio transport (works with any MCP client)
+- Direct HMAC API authentication (no OAuth needed)
+- Disk-based persistence
+- Clean tool definitions without vendor lock-in
+
+## License
+
+MIT

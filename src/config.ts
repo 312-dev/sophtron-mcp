@@ -1,20 +1,11 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 export default {
-  LogLevel: 'debug',
-  Port: '3000',
-  Env: 'dev', //mocked
-  Component: 'sph-mcp',
-  Version: '',
-  ServerName: 'sophtron/sophtron-mcp-server',
-  ServerVersion: '0.1.0',
-  SessionTimeOutMinutes: 10,
-  HostUrl: 'https://test.host.com',
-  WidgetHostBaseUrl: 'https://test2.host.com',
-  ApiServiceEndpoint: 'https://api.sophtron.com/api',
-  OauthIssuer: 'https://issuer.host.com',
-  OauthAudience: 'host-ucw',
-  SophtronApiUserId: '',
-  SophtronApiUserSecret: '',
-  AwsRegion: 'us-west-2',
-  S3Bucket: '',
-  S3Prefix: 'mcp',
-}
+  SophtronApiUserId: process.env.SOPHTRON_USER_ID || '',
+  SophtronApiUserSecret: process.env.SOPHTRON_ACCESS_KEY || '',
+  ApiServiceEndpoint: process.env.SOPHTRON_API_ENDPOINT || 'https://api.sophtron.com/api',
+  CustomerName: process.env.SOPHTRON_CUSTOMER_NAME || '',
+  ServerName: 'sophtron-mcp',
+  ServerVersion: '1.0.0',
+};

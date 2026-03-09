@@ -4,7 +4,6 @@ export function getHmac(dataToEncrypt: string, key: string) {
   if (!dataToEncrypt || !key) {
     return "";
   }
-
   const hmac = createHmac('sha256', Buffer.from(key, 'base64'));
   hmac.update(dataToEncrypt);
   return hmac.digest('base64');

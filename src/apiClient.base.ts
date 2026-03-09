@@ -1,17 +1,14 @@
-import { buildSophtronAuthCode } from "./utils";
-import HttpClient from "./httpClient";
-import config from './config';
+import { buildSophtronAuthCode } from "./utils.js";
+import HttpClient from "./httpClient.js";
+import config from './config.js';
 
-const apiEndpoint = config.ApiServiceEndpoint
+const apiEndpoint = config.ApiServiceEndpoint;
 
 export default class SophtronBaseClient {
-  apiConfig: any;
   httpClient: HttpClient;
-  authHeader: string | undefined;
 
-  constructor(oauthTokenHeader: string | undefined) {
+  constructor() {
     this.httpClient = new HttpClient();
-    this.authHeader = oauthTokenHeader;
   }
 
   getAuthHeaders(method: string, path: string) {
