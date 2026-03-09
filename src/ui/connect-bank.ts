@@ -44,12 +44,20 @@ export const CONNECT_BANK_HTML = `<!DOCTYPE html>
   .account-item .acct-balance { font-size: 14px; color: #047857; font-weight: 600; }
   .no-results { text-align: center; padding: 30px; color: #9ca3af; font-size: 14px; }
   .selected-bank { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f5f3ff; border: 1px solid #c7d2fe; border-radius: 8px; margin-bottom: 16px; font-size: 14px; font-weight: 500; }
+  #init-loading { text-align: center; padding: 40px; color: #9ca3af; font-size: 14px; }
 </style>
 </head>
 <body>
 
+<div id="init-loading">
+  <div class="status">
+    <div class="spinner"></div>
+    <div class="text">Initializing...</div>
+  </div>
+</div>
+
 <!-- Step 1: Search -->
-<div id="step-search" class="step active">
+<div id="step-search" class="step">
   <h2>Connect Your Bank</h2>
   <input class="search-box" id="search-input" type="text" placeholder="Search for your bank or credit card..." autocomplete="off">
   <div class="results" id="search-results"></div>
@@ -117,39 +125,104 @@ export const CONNECT_BANK_HTML = `<!DOCTYPE html>
 </div>
 
 <script>
-// --- Minimal MCP App bridge ---
+// --- MCP Apps protocol implementation ---
 const pending = {};
 let nextId = 1;
+let initialized = false;
 
-function mcpSend(method, params) {
+function sendMessage(msg) {
+  window.parent.postMessage(msg, '*');
+}
+
+function sendRequest(method, params) {
   return new Promise((resolve, reject) => {
     const id = nextId++;
     pending[id] = { resolve, reject };
-    window.parent.postMessage({ jsonrpc: '2.0', id, method, params }, '*');
+    sendMessage({ jsonrpc: '2.0', id, method, params });
   });
+}
+
+function sendNotification(method, params) {
+  sendMessage({ jsonrpc: '2.0', method, params: params || {} });
 }
 
 window.addEventListener('message', (e) => {
   const msg = e.data;
-  if (!msg || msg.jsonrpc !== '2.0') return;
-  if (msg.id && pending[msg.id]) {
+  if (!msg || typeof msg !== 'object') return;
+  if (msg.jsonrpc !== '2.0') return;
+
+  // Response to a request we sent
+  if (msg.id != null && pending[msg.id]) {
     if (msg.error) pending[msg.id].reject(msg.error);
     else pending[msg.id].resolve(msg.result);
     delete pending[msg.id];
+    return;
   }
-  // Initial tool result from host
-  if (msg.method === 'notifications/tool_result' || msg.method === 'notifications/tool-result') {
-    // We don't need the initial result, UI drives itself
+
+  // Notifications from host
+  if (msg.method === 'ui/notifications/tool-result') {
+    // Initial tool result — wizard doesn't need it
+  }
+  if (msg.method === 'ui/notifications/tool-input') {
+    // Tool arguments — wizard has none
+  }
+  if (msg.method === 'ui/notifications/host-context-changed') {
+    // Could apply theme changes
+  }
+
+  // Handle ping
+  if (msg.method === 'ping' && msg.id != null) {
+    sendMessage({ jsonrpc: '2.0', id: msg.id, result: {} });
   }
 });
 
-// Initialize connection to host
-mcpSend('ui/initialize', { name: 'Connect Bank', version: '1.0.0' }).catch(() => {});
+// --- MCP Apps initialization handshake ---
+async function init() {
+  try {
+    const result = await sendRequest('ui/initialize', {
+      appInfo: { name: 'Sophtron Connect Bank', version: '1.0.0' },
+      appCapabilities: {},
+      protocolVersion: '2026-01-26',
+    });
+    initialized = true;
 
+    // Send initialized notification
+    sendNotification('ui/notifications/initialized');
+
+    // Send initial size
+    notifySize();
+
+    // Show the search step
+    document.getElementById('init-loading').style.display = 'none';
+    showStep('search');
+    document.getElementById('search-input').focus();
+  } catch (e) {
+    // If init fails, still show UI (graceful degradation)
+    document.getElementById('init-loading').style.display = 'none';
+    showStep('search');
+  }
+}
+
+function notifySize() {
+  try {
+    const w = document.documentElement.scrollWidth;
+    const h = document.documentElement.scrollHeight;
+    sendNotification('ui/notifications/size-changed', { width: w, height: h });
+  } catch (e) {}
+}
+
+// Observe size changes
+const resizeObs = new ResizeObserver(() => { if (initialized) notifySize(); });
+resizeObs.observe(document.documentElement);
+resizeObs.observe(document.body);
+
+// Start initialization
+init();
+
+// --- Tool calls via MCP Apps ---
 async function callTool(name, args) {
   try {
-    const res = await mcpSend('tools/call', { name, arguments: args || {} });
-    // Result content is an array of { type, text } items
+    const res = await sendRequest('tools/call', { name, arguments: args || {} });
     const text = res?.content?.find(c => c.type === 'text')?.text;
     return text ? JSON.parse(text) : res;
   } catch (e) {
@@ -169,6 +242,7 @@ let searchTimeout = null;
 function showStep(step) {
   document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
   document.getElementById('step-' + step).classList.add('active');
+  notifySize();
 }
 
 function setProcessingText(text) {
@@ -234,10 +308,7 @@ async function doConnect() {
   const password = document.getElementById('login-password').value;
   const pin = document.getElementById('login-pin').value;
 
-  if (!username || !password) {
-    alert('Username and password are required.');
-    return;
-  }
+  if (!username || !password) return;
 
   document.getElementById('btn-connect').disabled = true;
   showStep('processing');
@@ -268,7 +339,7 @@ async function doConnect() {
 async function pollJob() {
   setProcessingText('Verifying credentials...');
   let attempts = 0;
-  const maxAttempts = 60; // 5 minutes at 5s intervals
+  const maxAttempts = 60;
 
   while (attempts < maxAttempts) {
     await sleep(4000);
@@ -385,7 +456,7 @@ async function submitMfa() {
       await callTool('answer_mfa', { jobId: currentJobId, type: 'captcha', value: captcha });
     }
     document.getElementById('btn-mfa-submit').disabled = false;
-    pollJob(); // Resume polling
+    pollJob();
   } catch (e) {
     showError('MFA submission failed: ' + (e.message || 'Unknown error'));
   }
